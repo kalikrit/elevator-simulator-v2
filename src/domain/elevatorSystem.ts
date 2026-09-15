@@ -4,57 +4,217 @@ import type {
   Metrics,
   AlgorithmId,
   TickResult,
+  TickEvent,
 } from './types';
-
-// Ядро. Оркестрирует queue, selector, metrics. Ноль зависимостей от Vue.
+import { addTarget, removeTarget } from './queue';
+import { pickElevator } from './selector';
+import { MetricsCollector } from './metrics';
+import { getAlgorithm } from './algorithms';
 
 export class ElevatorSystem {
+  private readonly config: ElevatorConfig;
+  private readonly elevators: Elevator[];
+  private readonly metrics: MetricsCollector;
+  private algorithm: AlgorithmId = 'nearest';
+  private wasIdle = true;
+
   constructor(config: ElevatorConfig) {
-    throw new Error('Not implemented: ElevatorSystem.constructor');
+    this.config = config;
+    this.elevators = Array.from({ length: config.count }, (_, i) => ({
+      id: i,
+      currentFloor: 0,
+      targetFloor: null,
+      direction: 'idle',
+      isMoving: false,
+      isWaiting: false,
+      waitTimeRemaining: 0,
+      queue: [],
+    }));
+    this.metrics = new MetricsCollector({ elevatorCount: config.count });
   }
 
-  /** Принять заявку. Выбирает лифт, кладёт цели в очередь. */
   requestTrip(from: number, to: number[], now: number): void {
-    throw new Error('Not implemented: ElevatorSystem.requestTrip');
+    const request = { from, to, requestedAt: now };
+    const elevator = pickElevator(
+      this.elevators,
+      request,
+      this.config,
+      this.algorithm,
+    );
+    if (!elevator) return;
+
+    this.metrics.onCallMade(request);
+
+    // Добавляем from, если лифт не уже на этом этаже.
+    if (elevator.currentFloor !== from) {
+      addTarget(elevator, from);
+    }
+    for (const target of to) {
+      addTarget(elevator, target);
+    }
+
+    this.updateTargetAndDirection(elevator);
   }
 
-  /** Продвинуть симуляцию на deltaMs. Возвращает события. */
   tick(deltaMs: number, now: number): TickResult {
-    throw new Error('Not implemented: ElevatorSystem.tick');
+    const arrivals: TickEvent[] = [];
+    const deltaSeconds = deltaMs / 1000;
+
+    for (const elevator of this.elevators) {
+      this.tickElevator(elevator, deltaSeconds, deltaMs, now, arrivals);
+    }
+
+    this.metrics.onTick(this.elevators);
+
+    const idle = this.isIdle();
+    const justFinished = idle && !this.wasIdle;
+    this.wasIdle = idle;
+
+    return { arrivals, justFinished };
   }
 
-  /** Сменить алгоритм. */
+  private tickElevator(
+    elevator: Elevator,
+    deltaSeconds: number,
+    deltaMs: number,
+    now: number,
+    arrivals: TickEvent[],
+  ): void {
+    // === Ожидание ===
+    if (elevator.isWaiting) {
+      elevator.waitTimeRemaining -= deltaMs;
+      if (elevator.waitTimeRemaining <= 0) {
+        elevator.isWaiting = false;
+        elevator.waitTimeRemaining = 0;
+        this.updateTargetAndDirection(elevator);
+      }
+      return;
+    }
+
+    // === Пустая очередь ===
+    if (elevator.queue.length === 0) {
+      if (elevator.currentFloor !== 0) {
+        // Возврат на 1 этаж
+        elevator.queue.push(0);
+        elevator.targetFloor = 0;
+        elevator.direction = 'down';
+        elevator.isMoving = true;
+      } else {
+        elevator.isMoving = false;
+        elevator.direction = 'idle';
+        elevator.targetFloor = null;
+      }
+      return;
+    }
+
+    // === Установка цели, если её нет ===
+    if (elevator.targetFloor === null) {
+      this.updateTargetAndDirection(elevator);
+    }
+
+    const target = elevator.targetFloor;
+    if (target === null) return;
+
+    // === Движение ===
+    const dir = Math.sign(target - elevator.currentFloor);
+    if (dir === 0) {
+      this.handleArrival(elevator, now, arrivals);
+      return;
+    }
+
+    const step = this.config.speedFloorsPerSec * deltaSeconds * dir;
+    const newFloor = elevator.currentFloor + step;
+
+    const reached = dir > 0 ? newFloor >= target : newFloor <= target;
+    if (reached) {
+      elevator.currentFloor = target;
+      this.handleArrival(elevator, now, arrivals);
+    } else {
+      elevator.currentFloor = newFloor;
+    }
+  }
+
+  private handleArrival(
+    elevator: Elevator,
+    now: number,
+    arrivals: TickEvent[],
+  ): void {
+    const floor = elevator.currentFloor;
+    removeTarget(elevator, floor);
+
+    arrivals.push({ elevatorId: elevator.id, floor });
+    this.metrics.onElevatorArrived(elevator, floor, now);
+
+    if (elevator.queue.length > 0) {
+      elevator.targetFloor = elevator.queue[0];
+      elevator.isWaiting = true;
+      elevator.waitTimeRemaining = this.config.waitTimeMs;
+      elevator.isMoving = false;
+      elevator.direction = this.directionTo(elevator, elevator.targetFloor);
+    } else {
+      elevator.targetFloor = null;
+      elevator.isMoving = false;
+      elevator.isWaiting = false;
+      elevator.direction = 'idle';
+    }
+  }
+
+  private updateTargetAndDirection(elevator: Elevator): void {
+    if (elevator.queue.length === 0) return;
+
+    elevator.targetFloor = elevator.queue[0];
+    elevator.isMoving = true;
+    elevator.direction = this.directionTo(elevator, elevator.targetFloor);
+  }
+
+  private directionTo(elevator: Elevator, floor: number): Elevator['direction'] {
+    if (floor > elevator.currentFloor) return 'up';
+    if (floor < elevator.currentFloor) return 'down';
+    return 'idle';
+  }
+
   setAlgorithm(id: AlgorithmId): void {
-    throw new Error('Not implemented: ElevatorSystem.setAlgorithm');
+    this.algorithm = id;
   }
 
-  /** Полный сброс: лифты на 0 этаж, метрики очищены. */
   reset(): void {
-    throw new Error('Not implemented: ElevatorSystem.reset');
+    for (const elevator of this.elevators) {
+      elevator.currentFloor = 0;
+      elevator.targetFloor = null;
+      elevator.direction = 'idle';
+      elevator.isMoving = false;
+      elevator.isWaiting = false;
+      elevator.waitTimeRemaining = 0;
+      elevator.queue = [];
+    }
+    this.metrics.reset();
+    this.wasIdle = true;
   }
 
-  /** Начать новый сценарий (сброс метрик + запись startTime). */
   startScenario(now: number): void {
-    throw new Error('Not implemented: ElevatorSystem.startScenario');
+    this.metrics.reset();
+    this.metrics.onScenarioStart(now);
   }
 
-  /** Текущее состояние лифтов. Только для чтения. */
   getElevators(): readonly Elevator[] {
-    throw new Error('Not implemented: ElevatorSystem.getElevators');
+    return this.elevators;
   }
 
-  /** Текущие метрики. */
-  getMetrics(): Metrics {
-    throw new Error('Not implemented: ElevatorSystem.getMetrics');
+  getMetrics(now: number): Metrics {
+    return this.metrics.snapshot(getAlgorithm(this.algorithm), now);
   }
 
-  /** Активный алгоритм. */
   getAlgorithm(): AlgorithmId {
-    throw new Error('Not implemented: ElevatorSystem.getAlgorithm');
+    return this.algorithm;
   }
 
-  /** Все лифты стоят и очередь пуста. */
   isIdle(): boolean {
-    throw new Error('Not implemented: ElevatorSystem.isIdle');
+    return this.elevators.every(
+      (e) =>
+        !e.isMoving &&
+        !e.isWaiting &&
+        e.queue.length === 0 &&
+        e.currentFloor === 0,
+    );
   }
 }
