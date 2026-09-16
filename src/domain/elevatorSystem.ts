@@ -95,19 +95,12 @@ export class ElevatorSystem {
       return;
     }
 
-    // === Пустая очередь ===
+    // === Пустая очередь — лифт останавливается там, где он есть ===
     if (elevator.queue.length === 0) {
-      if (elevator.currentFloor !== 0) {
-        // Возврат на 1 этаж
-        elevator.queue.push(0);
-        elevator.targetFloor = 0;
-        elevator.direction = 'down';
-        elevator.isMoving = true;
-      } else {
-        elevator.isMoving = false;
-        elevator.direction = 'idle';
-        elevator.targetFloor = null;
-      }
+      elevator.isMoving = false;
+      elevator.isWaiting = false;
+      elevator.direction = 'idle';
+      elevator.targetFloor = null;
       return;
     }
 
@@ -214,11 +207,7 @@ export class ElevatorSystem {
 
   isIdle(): boolean {
     return this.elevators.every(
-      (e) =>
-        !e.isMoving &&
-        !e.isWaiting &&
-        e.queue.length === 0 &&
-        e.currentFloor === 0,
+      (e) => !e.isMoving && !e.isWaiting && e.queue.length === 0,
     );
   }
 }

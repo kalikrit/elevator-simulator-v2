@@ -28,6 +28,16 @@ describe('ElevatorSystem', () => {
       expect(system.isIdle()).toBe(true);
     });
 
+    it('isIdle = true, даже если лифты на разных этажах', () => {
+      const elevators = system.getElevators();
+      elevators[0].currentFloor = 10;
+      elevators[1].currentFloor = 15;
+      elevators[2].currentFloor = 7;
+      elevators[3].currentFloor = 22;
+
+      expect(system.isIdle()).toBe(true);
+    });
+
     it('алгоритм по умолчанию — nearest', () => {
       expect(system.getAlgorithm()).toBe('nearest');
     });
@@ -129,6 +139,29 @@ describe('ElevatorSystem', () => {
       expect(e0.queue).toEqual([]);
       expect(e0.currentFloor).toBe(10);
     });
+
+    it('лифт остаётся на конечном этаже, не возвращается на 0', () => {
+      system.requestTrip(5, [10], 0);
+      system.tick(5000, 5000);   // прибыл на 5
+      system.tick(5000, 10000);  // отждал
+      system.tick(5000, 15000);  // прибыл на 10
+
+      const e0 = system.getElevators()[0];
+      expect(e0.currentFloor).toBe(10);
+      expect(e0.isMoving).toBe(false);
+      expect(e0.isWaiting).toBe(false);
+      expect(e0.targetFloor).toBeNull();
+      expect(e0.queue).toEqual([]);
+    });
+
+    it('isIdle = true после завершения поездки на верхнем этаже', () => {
+      system.requestTrip(5, [10], 0);
+      system.tick(5000, 5000);
+      system.tick(5000, 10000);
+      system.tick(5000, 15000);
+
+      expect(system.isIdle()).toBe(true);
+    });
   });
 
   describe('setAlgorithm', () => {
@@ -169,6 +202,19 @@ describe('ElevatorSystem', () => {
       expect(e0.isWaiting).toBe(false);
       expect(e0.direction).toBe('idle');
       expect(system.isIdle()).toBe(true);
+    });
+
+    it('после reset лифты возвращаются на 0, даже если стояли на других этажах', () => {
+      system.requestTrip(5, [10], 0);
+      system.tick(5000, 5000);   // прибыл на 5
+      system.tick(5000, 10000);  // отждал
+      system.tick(5000, 15000);  // прибыл на 10
+
+      system.reset();
+
+      for (const e of system.getElevators()) {
+        expect(e.currentFloor).toBe(0);
+      }
     });
   });
 
