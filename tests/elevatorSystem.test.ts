@@ -64,6 +64,17 @@ describe('ElevatorSystem', () => {
       system.requestTrip(5, [10], 0);
       expect(system.isIdle()).toBe(false);
     });
+
+    it('сразу фиксирует ожидание 0, если лифт уже на этаже вызова', () => {
+      system.startScenario(0);
+      system.requestTrip(0, [10], 0);
+
+      const metrics = system.getMetrics(0);
+
+      expect(metrics.callsCount).toBe(1);
+      expect(metrics.waitTimes).toEqual([0]);
+      expect(metrics.totalStops).toBe(1);
+    });
   });
 
   describe('tick — движение', () => {

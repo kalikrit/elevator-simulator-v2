@@ -45,10 +45,14 @@ export class ElevatorSystem {
 
     this.metrics.onCallMade(request);
 
-    // Добавляем from, если лифт не уже на этом этаже.
-    if (elevator.currentFloor !== from) {
+    // Лифт уже на этаже вызова — фиксируем мгновенное прибытие.
+    // Иначе ожидание запишется, когда лифт случайно вернётся сюда.
+    if (elevator.currentFloor === from) {
+      this.metrics.onElevatorArrived(elevator, from, now);
+    } else {
       addTarget(elevator, from);
     }
+
     for (const target of to) {
       addTarget(elevator, target);
     }
