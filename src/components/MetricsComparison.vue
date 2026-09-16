@@ -107,7 +107,7 @@ const rows: Row[] = [
     label: 'Общее время',
     unit: 'с',
     getValue: (m) => m.totalTime,
-    format: (m) => m.totalTime.toFixed(1),
+    format: (m) => m.totalTime.toFixed(2),
     lowerIsBetter: true,
   },
   {
@@ -115,7 +115,7 @@ const rows: Row[] = [
     label: 'Среднее ожидание',
     unit: 'с',
     getValue: (m) => m.averageWaitTime,
-    format: (m) => m.averageWaitTime.toFixed(1),
+    format: (m) => m.averageWaitTime.toFixed(2),
     lowerIsBetter: true,
   },
   {
@@ -123,7 +123,7 @@ const rows: Row[] = [
     label: 'Макс. ожидание',
     unit: 'с',
     getValue: (m) => m.maxWaitTime,
-    format: (m) => m.maxWaitTime.toFixed(1),
+    format: (m) => m.maxWaitTime.toFixed(2),
     lowerIsBetter: true,
   },
   {

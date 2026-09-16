@@ -28,7 +28,7 @@
             :key="i"
             class="wait-chip"
           >
-            {{ t.toFixed(1) }}
+            {{ t.toFixed(2) }}
           </span>
         </div>
       </div>
@@ -54,9 +54,9 @@ const items = computed<MetricItem[]>(() => {
   if (!props.metrics) return [];
   const m = props.metrics;
   return [
-    { label: 'Время', value: m.totalTime.toFixed(1), unit: 'с' },
-    { label: 'Ср. ожид.', value: m.averageWaitTime.toFixed(1), unit: 'с' },
-    { label: 'Макс. ожид.', value: m.maxWaitTime.toFixed(1), unit: 'с' },
+    { label: 'Время', value: m.totalTime.toFixed(2), unit: 'с' },
+    { label: 'Ср. ожид.', value: m.averageWaitTime.toFixed(2), unit: 'с' },
+    { label: 'Макс. ожид.', value: m.maxWaitTime.toFixed(2), unit: 'с' },
     { label: 'Пробег', value: m.totalDistance.toFixed(0), unit: 'эт.' },
     { label: 'Остановки', value: String(m.totalStops) },
     { label: 'Вызовов', value: String(m.callsCount) },
