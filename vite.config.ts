@@ -4,6 +4,7 @@ import vue from '@vitejs/plugin-vue';
 import { fileURLToPath, URL } from 'node:url';
 
 export default defineConfig({
+  base: '/elevator-simulator-v2/',
   plugins: [vue()],
   resolve: {
     alias: {
