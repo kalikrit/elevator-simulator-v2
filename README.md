@@ -1,5 +1,9 @@
 # Elevator Simulator v2
 
+🔗 **Live demo:** https://kalikrit.github.io/elevator-simulator-v2/
+
+[![Deploy to GitHub Pages](https://github.com/kalikrit/elevator-simulator-v2/actions/workflows/deploy.yml/badge.svg)](https://github.com/kalikrit/elevator-simulator-v2/actions/workflows/deploy.yml)
+
 Симулятор работы 4 лифтов в 25-этажном доме с двумя алгоритмами управления и сравнением их эффективности.
 
 ## Что это
