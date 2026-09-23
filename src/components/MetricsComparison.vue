@@ -84,11 +84,8 @@ interface Row {
   key: string;
   label: string;
   unit: string;
-  /** Функция извлечения значения из метрик. */
   getValue: (m: Metrics) => number;
-  /** Функция форматирования для отображения. */
   format: (m: Metrics) => string;
-  /** true — меньше значит лучше. */
   lowerIsBetter: boolean;
 }
 

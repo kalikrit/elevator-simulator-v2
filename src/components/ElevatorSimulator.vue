@@ -53,6 +53,12 @@
         <MetricsComparison :by-algorithm="byAlgorithm" />
       </div>
     </section>
+
+    <footer class="sim__footer">
+      <span class="sim__footer-item">Elevator Simulator</span>
+      <span class="sim__footer-sep">·</span>
+      <span class="sim__footer-item sim__footer-version">v{{ appVersion }}</span>
+    </footer>
   </div>
 </template>
 
@@ -86,6 +92,7 @@ const { isRunning, lastMetrics, run, stop } = useScenarioRunner(systemApi);
 
 // === Локальное состояние UI ===
 
+const appVersion = __APP_VERSION__;
 const descriptionVisible = ref(true);
 const activeCalls = reactive(new Set<number>());
 const byAlgorithm = ref<Partial<Record<AlgorithmId, Metrics>>>({});
@@ -259,6 +266,30 @@ onArrival((event) => {
       background: rgba(0, 212, 255, 0.25);
       border-radius: 3px;
     }
+  }
+
+  &__footer {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0 0;
+    font-family: 'JetBrains Mono', 'Roboto Mono', ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: #4a5568;
+    flex-shrink: 0;
+    user-select: none;
+  }
+
+  &__footer-sep {
+    color: rgba(100, 200, 255, 0.15);
+  }
+
+  &__footer-version {
+    color: #00d4ff;
+    opacity: 0.7;
+    text-shadow: 0 0 8px rgba(0, 212, 255, 0.3);
   }
 }
 
