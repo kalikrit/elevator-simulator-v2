@@ -71,6 +71,8 @@ import MetricsComparison from './MetricsComparison.vue';
 
 // === Система ===
 
+const systemApi = useElevatorSystem();
+
 const {
   elevators,
   algorithm,
@@ -78,10 +80,9 @@ const {
   reset,
   requestTrip,
   onArrival,
-  getSystem,
-} = useElevatorSystem();
+} = systemApi;
 
-const { isRunning, lastMetrics, run, stop } = useScenarioRunner(getSystem());
+const { isRunning, lastMetrics, run, stop } = useScenarioRunner(systemApi);
 
 // === Локальное состояние UI ===
 

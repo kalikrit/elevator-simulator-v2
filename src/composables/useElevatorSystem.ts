@@ -10,6 +10,9 @@ import type {
 import { ElevatorSystem } from '@/domain/elevatorSystem';
 import { DEFAULT_CONFIG } from '@/domain/config';
 
+/** Фиксированный шаг симуляции (мс). ~62.5 FPS. */
+const FIXED_STEP_MS = 16;
+
 export interface UseElevatorSystemReturn {
   elevators: Ref<readonly Elevator[]>;
   metrics: Ref<Metrics>;
@@ -22,8 +25,10 @@ export interface UseElevatorSystemReturn {
   startScenario: () => void;
 
   onArrival: (cb: (event: TickEvent) => void) => () => void;
+  onAfterTick: (cb: (simTime: number) => void) => () => void;
 
   getSystem: () => ElevatorSystem;
+  getSimTime: () => number;
 }
 
 export function useElevatorSystem(
@@ -31,8 +36,6 @@ export function useElevatorSystem(
 ): UseElevatorSystemReturn {
   const system = new ElevatorSystem(config);
 
-  // shallowRef + ручная замена массива — быстрее, чем глубокий reactive
-  // для 60 FPS. Мы всё равно каждый кадр заменяем ссылку целиком.
   const elevators = shallowRef<readonly Elevator[]>(system.getElevators()) as ShallowRef<
     readonly Elevator[]
   >;
@@ -40,30 +43,41 @@ export function useElevatorSystem(
   const algorithm = ref<AlgorithmId>(system.getAlgorithm());
   const isIdle = ref<boolean>(system.isIdle());
 
-  // Подписчики на события прибытия. Локальный массив — никаких модульных утечек.
   const arrivalListeners = new Set<(event: TickEvent) => void>();
+  const afterTickListeners = new Set<(simTime: number) => void>();
 
   let rafId: number | null = null;
   let lastTs = 0;
+  let accumulator = 0;
+  let simTime = 0;
 
   const loop = (ts: number) => {
-    const deltaMs = ts - lastTs;
+    const realDelta = ts - lastTs;
     lastTs = ts;
 
-    const result = system.tick(deltaMs, ts);
+    // Ограничиваем максимальный шаг, чтобы после паузы вкладки
+    // не «догонять» симуляцию рывком.
+    accumulator += Math.min(realDelta, 250);
 
-    // Синхронизация реактивного состояния.
-    // Мутируем лифты in-place (они reactive через shallowRef-массив),
-    // а ссылку меняем, чтобы Vue заметил изменения для v-for.
-    elevators.value = [...system.getElevators()];
-    metrics.value = system.getMetrics(ts);
-    isIdle.value = system.isIdle();
+    let anyTick = false;
 
-    // Публикуем события.
-    for (const event of result.arrivals) {
-      for (const listener of arrivalListeners) {
-        listener(event);
+    while (accumulator >= FIXED_STEP_MS) {
+      simTime += FIXED_STEP_MS;
+      const result = system.tick(FIXED_STEP_MS, simTime);
+
+      for (const event of result.arrivals) {
+        for (const listener of arrivalListeners) listener(event);
       }
+      for (const listener of afterTickListeners) listener(simTime);
+
+      accumulator -= FIXED_STEP_MS;
+      anyTick = true;
+    }
+
+    if (anyTick) {
+      elevators.value = [...system.getElevators()];
+      metrics.value = system.getMetrics(simTime);
+      isIdle.value = system.isIdle();
     }
 
     rafId = requestAnimationFrame(loop);
@@ -71,6 +85,8 @@ export function useElevatorSystem(
 
   onMounted(() => {
     lastTs = performance.now();
+    accumulator = 0;
+    simTime = 0;
     rafId = requestAnimationFrame(loop);
   });
 
@@ -80,12 +96,11 @@ export function useElevatorSystem(
       rafId = null;
     }
     arrivalListeners.clear();
+    afterTickListeners.clear();
   });
 
-  // === Публичный API ===
-
   const requestTrip = (from: number, to: number[]): void => {
-    system.requestTrip(from, to, performance.now());
+    system.requestTrip(from, to, simTime);
   };
 
   const setAlgorithm = (id: AlgorithmId): void => {
@@ -95,23 +110,29 @@ export function useElevatorSystem(
 
   const reset = (): void => {
     system.reset();
+    simTime = 0;
+    accumulator = 0;
     elevators.value = [...system.getElevators()];
-    metrics.value = system.getMetrics(performance.now());
+    metrics.value = system.getMetrics(0);
     isIdle.value = system.isIdle();
   };
 
   const startScenario = (): void => {
-    system.startScenario(performance.now());
+    system.startScenario(simTime);
   };
 
   const onArrival = (cb: (event: TickEvent) => void): (() => void) => {
     arrivalListeners.add(cb);
-    return () => {
-      arrivalListeners.delete(cb);
-    };
+    return () => arrivalListeners.delete(cb);
+  };
+
+  const onAfterTick = (cb: (simTime: number) => void): (() => void) => {
+    afterTickListeners.add(cb);
+    return () => afterTickListeners.delete(cb);
   };
 
   const getSystem = (): ElevatorSystem => system;
+  const getSimTime = (): number => simTime;
 
   return {
     elevators,
@@ -123,6 +144,8 @@ export function useElevatorSystem(
     reset,
     startScenario,
     onArrival,
+    onAfterTick,
     getSystem,
+    getSimTime,
   };
 }
